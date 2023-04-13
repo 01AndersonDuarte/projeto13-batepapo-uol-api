@@ -54,7 +54,11 @@ app.post("/participants", (req, res) => {
     });
 });
 app.get("/participants", (req, res) => {
-
+    db.collection("users").find().toArray().then((users)=>{
+        res.send(users);
+    }).catch((error) => {
+        return res.status(500).send(error.message)
+    });
 });
 
 app.post("/messages", (req, res) => {
