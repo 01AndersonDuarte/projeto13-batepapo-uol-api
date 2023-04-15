@@ -3,6 +3,7 @@ import cors from "cors";
 import { MongoClient } from "mongodb";
 import dayjs from "dayjs";
 import dotenv from "dotenv";
+import joi from "joi";
 dotenv.config();
 
 const app = express();
@@ -19,46 +20,41 @@ app.use(express.json());
 
 app.listen(PORT, () => console.log(`Servidor funcionando na porta ${PORT}`));
 
-app.post("/participants", (req, res) => {
+app.post("/participants", async (req, res) => {
     const { name } = req.body;
 
-    if (name.length === 0) {
-        return res.sendStatus(422);
+    const userSchema = joi.object({
+        name: joi.string().required().min(4)
+    });
+
+    const validation = userSchema.validate(req.body);
+
+    if (validation.error) {
+        const errors = validation.error.details.map((detail) => detail.message);
+        return res.status(422).send(errors);
     }
 
-    db.collection("users").findOne({ name: name }).then((user) => {
-        if (!user) {
-            db.collection("users").insertOne({ name: name, lastStatus: Date.now() }).then((sucess) => {
-                const newUser = {
-                    from: name,
-                    to: 'Todos',
-                    text: 'entra na sala...',
-                    type: 'status',
-                    time: dayjs().format('HH:mm:ss')
-                };
+    const user = await db.collection("users").findOne({ name: name });
 
-                db.collection("messages").insertOne(newUser).then((sucess) => {
-                    res.status(201).send("Usuário cadastrado com sucesso");
-                }).catch((error) => {
-                    res.status(500).send(error.message)
-                });
-            }).catch((error) => {
-                res.status(500).send(error.message)
-            });
+    if (!user) {
+        await db.collection("users").insertOne({ name: name, lastStatus: Date.now() });
 
-        } else {
-            return res.status(409).send("Este usuário já está cadastrado.");
-        }
-    }).catch((error) => {
-        return res.status(500).send(error.message)
-    });
+        const newUser = {
+            from: name,
+            to: 'Todos',
+            text: 'entra na sala...',
+            type: 'status',
+            time: dayjs().format('HH:mm:ss')
+        };
+
+        await db.collection("messages").insertOne(newUser);
+        return res.status(201).send("Usuário cadastrado com sucesso");
+    }
+    return res.status(409).send("Este usuário já está cadastrado.");
 });
-app.get("/participants", (req, res) => {
-    db.collection("users").find().toArray().then((users)=>{
-        res.send(users);
-    }).catch((error) => {
-        return res.status(500).send(error.message)
-    });
+app.get("/participants", async (req, res) => {
+    const users = await db.collection("users").find().toArray();
+    res.send(users); 
 });
 
 app.post("/messages", (req, res) => {
