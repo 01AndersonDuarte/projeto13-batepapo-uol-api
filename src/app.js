@@ -54,10 +54,37 @@ app.post("/participants", async (req, res) => {
 });
 app.get("/participants", async (req, res) => {
     const users = await db.collection("users").find().toArray();
-    res.send(users); 
+    res.send(users);
 });
 
-app.post("/messages", (req, res) => {
+app.post("/messages", async (req, res) => {
+    const { to, text, type } = req.body;
+    const from = req.headers.user;
+    const objectMessage = {from, to, text, type};
+    const newMessage = {...objectMessage, time: dayjs().format('HH:mm:ss')};
+
+    const messagesSchema = joi.object({
+        from: joi.string().required().min(4),
+        to: joi.string().required().min(4),
+        text: joi.string().required(),
+        type: joi.string().required().min(7)
+    });
+
+    const validation = messagesSchema.validate(objectMessage, { abortEarly: false });
+    if(validation.error) return res.status(422).send(validation.error);
+
+    const userTo = await db.collection("users").findOne({name: to}, {name: 1});
+    if(!userTo) return res.status(422).send("O usuário não está online");
+
+    const userFrom = await db.collection("users").findOne({name: from}, {name: 1});
+    if(!userFrom) return res.status(422).send("Você está deslogado");
+
+    if(type!=="message" && type!=="private_message") return res.sendStatus(422);
+    if(userTo.name===userFrom.name) return res.status(422).send("Você não pode enviar uma mensagem para si mesmo");
+
+    db.collection("messages").insertOne(newMessage);
+    return res.sendStatus(201);
+    console.log(userTo, userFrom);
 
 });
 app.get("/messages", (req, res) => {
