@@ -34,27 +34,34 @@ app.post("/participants", async (req, res) => {
         return res.status(422).send(errors);
     }
 
-    const user = await db.collection("users").findOne({ name: name });
+    try {
+        const user = await db.collection("users").findOne({ name: name });
+        if (!user) {
+            await db.collection("users").insertOne({ name: name, lastStatus: Date.now() });
 
-    if (!user) {
-        await db.collection("users").insertOne({ name: name, lastStatus: Date.now() });
+            const newUser = {
+                from: name,
+                to: 'Todos',
+                text: 'entra na sala...',
+                type: 'status',
+                time: dayjs().format('HH:mm:ss')
+            };
 
-        const newUser = {
-            from: name,
-            to: 'Todos',
-            text: 'entra na sala...',
-            type: 'status',
-            time: dayjs().format('HH:mm:ss')
-        };
-
-        await db.collection("messages").insertOne(newUser);
-        return res.status(201).send("Usuário cadastrado com sucesso");
+            await db.collection("messages").insertOne(newUser);
+            return res.status(201).send("Usuário cadastrado com sucesso");
+        }
+    } catch (err) {
+        res.status(500).send(err.message)
     }
     return res.status(409).send("Este usuário já está cadastrado.");
 });
 app.get("/participants", async (req, res) => {
-    const users = await db.collection("users").find().toArray();
-    res.send(users);
+    try {
+        const users = await db.collection("users").find().toArray();
+        res.send(users);
+    } catch (err) {
+        res.status(500).send(err.message)
+    }
 });
 
 app.post("/messages", async (req, res) => {
@@ -73,33 +80,83 @@ app.post("/messages", async (req, res) => {
     const validation = messagesSchema.validate(objectMessage, { abortEarly: false });
     if (validation.error) return res.status(422).send(validation.error);
 
-    const userTo = await db.collection("users").findOne({ name: to }, { name: 1 });
-    if (!userTo) return res.status(422).send("O usuário não está online");
+    try {
+        const userTo = await db.collection("users").findOne({ name: to }, { name: 1 });
+        if (!userTo) return res.status(422).send("O usuário não está online");
 
-    const userFrom = await db.collection("users").findOne({ name: from }, { name: 1 });
-    if (!userFrom) return res.status(422).send("Você está deslogado");
+        const userFrom = await db.collection("users").findOne({ name: from }, { name: 1 });
+        if (!userFrom) return res.status(422).send("Você está deslogado");
 
-    if (type !== "message" && type !== "private_message") return res.sendStatus(422);
-    if (userTo.name === userFrom.name) return res.status(422).send("Você não pode enviar uma mensagem para si mesmo");
+        if (type !== "message" && type !== "private_message") return res.sendStatus(422);
+        if (userTo.name === userFrom.name) return res.status(422).send("Você não pode enviar uma mensagem para si mesmo");
 
-    db.collection("messages").insertOne(newMessage);
-    return res.sendStatus(201);
-    console.log(userTo, userFrom);
-
+        db.collection("messages").insertOne(newMessage);
+        return res.sendStatus(201);
+        console.log(userTo, userFrom);
+    } catch (err) {
+        res.status(500).send(err.message)
+    }
 });
 app.get("/messages", async (req, res) => {
     const from = req.headers.user;
     const { limit } = req.query;
-    
-    const messages = await db.collection("messages").find(
-        ({ $or: [{ from: from }, { to: from }, { to: "Todos" }] })
-    ).toArray();
 
-    if(limit) return res.send(messages.slice(-limit));
+    const limitSchema = joi.object({
+        limit: joi.number().integer().positive()
+    });
+    const validation = limitSchema.validate(req.query);
+    if (validation.error) return res.sendStatus(422);
 
-    res.send(messages);
+    try {
+        const messages = await db.collection("messages").find(
+            ({ $or: [{ from: from }, { to: from }, { to: "Todos" }] })
+        ).toArray();
+
+        if (limit) return res.send(messages.slice(-limit));
+
+        return res.send(messages);
+    } catch (err) {
+        res.status(500).send(err.message)
+    }
 });
 
-app.post("/status", (req, res) => {
+app.post("/status", async (req, res) => {
+    const { user } = req.headers;
 
+    try {
+        const userLogin = await db.collection("users").findOne({ name: decodeURIComponent(user) });
+        if (!userLogin) return res.sendStatus(404);
+
+        await db.collection("users").updateOne({ name: decodeURIComponent(user) }, { $set: { lastStatus: Date.now() } });
+        return res.sendStatus(200);
+    } catch (err) {
+        res.status(500).send(err.message)
+    }
 });
+
+setInterval(async () => {
+    const users = await db.collection("users").find().toArray();
+
+    const usersOff = [];
+    users.filter(u => {
+        if ((Date.now() - u.lastStatus) > 10000) {
+            usersOff.push(u.name);
+            return;
+        }
+    })
+    try {
+        await db.collection("users").deleteMany({ name: { $in: usersOff } });
+        usersOff.map(async (name) => {
+            await db.collection("messages").insertOne(
+                {
+                    from: name,
+                    to: 'Todos',
+                    text: 'sai da sala...',
+                    type: 'status',
+                    time: dayjs().format('HH:mm:ss')
+                });
+        });
+    } catch (err) {
+        res.status(500).send(err.message)
+    }
+}, 15000);
