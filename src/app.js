@@ -35,9 +35,9 @@ app.post("/participants", async (req, res) => {
     }
 
     try {
-        const user = await db.collection("users").findOne({ name: name });
+        const user = await db.collection("participants").findOne({ name: name });
         if (!user) {
-            await db.collection("users").insertOne({ name: name, lastStatus: Date.now() });
+            await db.collection("participants").insertOne({ name: name, lastStatus: Date.now() });
 
             const newUser = {
                 from: name,
@@ -57,7 +57,7 @@ app.post("/participants", async (req, res) => {
 });
 app.get("/participants", async (req, res) => {
     try {
-        const users = await db.collection("users").find().toArray();
+        const users = await db.collection("participants").find().toArray();
         res.send(users);
     } catch (err) {
         res.status(500).send(err.message)
@@ -81,10 +81,10 @@ app.post("/messages", async (req, res) => {
     if (validation.error) return res.status(422).send(validation.error);
 
     try {
-        const userTo = await db.collection("users").findOne({ name: to }, { name: 1 });
+        const userTo = await db.collection("participants").findOne({ name: to }, { name: 1 });
         if (!userTo) return res.status(422).send("O usuário não está online");
 
-        const userFrom = await db.collection("users").findOne({ name: from }, { name: 1 });
+        const userFrom = await db.collection("participants").findOne({ name: from }, { name: 1 });
         if (!userFrom) return res.status(422).send("Você está deslogado");
 
         if (type !== "message" && type !== "private_message") return res.sendStatus(422);
@@ -124,10 +124,10 @@ app.post("/status", async (req, res) => {
     const { user } = req.headers;
 
     try {
-        const userLogin = await db.collection("users").findOne({ name: decodeURIComponent(user) });
+        const userLogin = await db.collection("participants").findOne({ name: decodeURIComponent(user) });
         if (!userLogin) return res.sendStatus(404);
 
-        await db.collection("users").updateOne({ name: decodeURIComponent(user) }, { $set: { lastStatus: Date.now() } });
+        await db.collection("participants").updateOne({ name: decodeURIComponent(user) }, { $set: { lastStatus: Date.now() } });
         return res.sendStatus(200);
     } catch (err) {
         res.status(500).send(err.message)
@@ -135,7 +135,7 @@ app.post("/status", async (req, res) => {
 });
 
 setInterval(async () => {
-    const users = await db.collection("users").find().toArray();
+    const users = await db.collection("participants").find().toArray();
 
     const usersOff = [];
     users.filter(u => {
@@ -145,7 +145,7 @@ setInterval(async () => {
         }
     })
     try {
-        await db.collection("users").deleteMany({ name: { $in: usersOff } });
+        await db.collection("participants").deleteMany({ name: { $in: usersOff } });
         usersOff.map(async (name) => {
             await db.collection("messages").insertOne(
                 {
