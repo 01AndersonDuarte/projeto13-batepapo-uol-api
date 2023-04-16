@@ -93,11 +93,13 @@ app.post("/messages", async (req, res) => {
     if (validation.error) return res.status(422).send(validation.error);
 
     try {
-        const userTo = await db.collection("participants").findOne({ name: to }, { name: 1 });
-        if (!userTo) return res.status(422).send("O usuário não está online");
+        const userTo = await db.collection("participants").findOne({ name: to });
+        if (!userTo) return res.sendStatus(422); 
+        // .send("O usuário não está online");
 
-        const userFrom = await db.collection("participants").findOne({ name: from }, { name: 1 });
-        if (!userFrom) return res.status(422).send("Você está deslogado");
+        const userFrom = await db.collection("participants").findOne({ name: from });
+        if (!userFrom) return res.sendStatus(422);
+        // .send("Você está deslogado");
 
         if (type !== "message" && type !== "private_message") return res.sendStatus(422);
         if (userTo.name === userFrom.name) return res.status(422).send("Você não pode enviar uma mensagem para si mesmo");
