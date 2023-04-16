@@ -4,6 +4,7 @@ import { MongoClient } from "mongodb";
 import dayjs from "dayjs";
 import dotenv from "dotenv";
 import joi from "joi";
+import iconv from "iconv-lite";
 dotenv.config();
 
 const app = express();
@@ -19,6 +20,16 @@ app.use(cors());
 app.use(express.json());
 
 app.listen(PORT, () => console.log(`Servidor funcionando na porta ${PORT}`));
+
+const headerMiddleware = (req, res, next) => {
+    const content = req.headers.user;
+    if (content) {
+        const decoded = iconv.decode(Buffer.from(content, 'binary'), 'utf-8');
+        req.headers.user = decoded;
+    }
+    next();
+}
+app.use(headerMiddleware);
 
 app.post("/participants", async (req, res) => {
     const { name } = req.body;
@@ -67,6 +78,7 @@ app.get("/participants", async (req, res) => {
 app.post("/messages", async (req, res) => {
     const { to, text, type } = req.body;
     const from = req.headers.user;
+    
     const objectMessage = { from, to, text, type };
     const newMessage = { ...objectMessage, time: dayjs().format('HH:mm:ss') };
 
@@ -109,7 +121,7 @@ app.get("/messages", async (req, res) => {
 
     try {
         const messages = await db.collection("messages").find(
-            ({ $or: [{ from: from }, { to: from }, { to: "Todos" }] })
+            ({ $or: [{ from: from }, { to: from }, { to: "Todos" }, {type: "message"}] })
         ).toArray();
 
         if (limit) return res.send(messages.slice(-limit));
@@ -124,10 +136,10 @@ app.post("/status", async (req, res) => {
     const { user } = req.headers;
 
     try {
-        const userLogin = await db.collection("participants").findOne({ name: decodeURIComponent(user) });
+        const userLogin = await db.collection("participants").findOne({ name: user });
         if (!userLogin) return res.sendStatus(404);
 
-        await db.collection("participants").updateOne({ name: decodeURIComponent(user) }, { $set: { lastStatus: Date.now() } });
+        await db.collection("participants").updateOne({ name: user }, { $set: { lastStatus: Date.now() } });
         return res.sendStatus(200);
     } catch (err) {
         res.status(500).send(err.message)
