@@ -94,15 +94,13 @@ app.post("/messages", async (req, res) => {
 
     try {
         const userTo = await db.collection("participants").findOne({ name: to });
-        if (!userTo) return res.sendStatus(422); 
-        // .send("O usuário não está online");
+        if (!userTo && to!=="Todos") return res.sendStatus(422).send("O usuário não está online");
 
         const userFrom = await db.collection("participants").findOne({ name: from });
-        if (!userFrom) return res.sendStatus(422);
-        // .send("Você está deslogado");
+        if (!userFrom) return res.sendStatus(422).send("Você está deslogado");
 
-        // if (type !== "message" && type !== "private_message") return res.sendStatus(422);
-        // if (userTo.name === userFrom.name) return res.status(422).send("Você não pode enviar uma mensagem para si mesmo");
+        if (type !== "message" && type !== "private_message") return res.sendStatus(422);
+        if (userTo.name === userFrom.name) return res.status(422).send("Você não pode enviar uma mensagem para si mesmo");
 
         db.collection("messages").insertOne(newMessage);
         return res.sendStatus(201);
