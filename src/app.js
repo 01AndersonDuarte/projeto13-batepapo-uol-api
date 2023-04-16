@@ -47,7 +47,7 @@ app.post("/participants", async (req, res) => {
 
     try {
         const user = await db.collection("participants").findOne({ name: name });
-        if (!user) {
+        if (!user && name!=="Todos") {
             await db.collection("participants").insertOne({ name: name, lastStatus: Date.now() });
 
             const newUser = {
@@ -78,7 +78,7 @@ app.get("/participants", async (req, res) => {
 app.post("/messages", async (req, res) => {
     const { to, text, type } = req.body;
     const from = req.headers.user;
-    
+
     const objectMessage = { from, to, text, type };
     const newMessage = { ...objectMessage, time: dayjs().format('HH:mm:ss') };
 
@@ -94,17 +94,18 @@ app.post("/messages", async (req, res) => {
 
     try {
         const userTo = await db.collection("participants").findOne({ name: to });
-        if (!userTo && to!=="Todos") return res.sendStatus(422).send("O usuário não está online");
+        if (!userTo && to !== "Todos") return res.status(422).send("O usuário não está online");
 
         const userFrom = await db.collection("participants").findOne({ name: from });
-        if (!userFrom) return res.sendStatus(422).send("Você está deslogado");
+        if (!userFrom) return res.status(422).send("Você está deslogado");
 
         if (type !== "message" && type !== "private_message") return res.sendStatus(422);
-        if (userTo.name === userFrom.name) return res.status(422).send("Você não pode enviar uma mensagem para si mesmo");
+        if (userTo) {
+            if (userTo.name === userFrom.name) return res.status(422).send("Você não pode enviar uma mensagem para si mesmo");
+        }
 
         db.collection("messages").insertOne(newMessage);
         return res.sendStatus(201);
-        console.log(userTo, userFrom);
     } catch (err) {
         res.status(500).send(err.message)
     }
@@ -121,7 +122,7 @@ app.get("/messages", async (req, res) => {
 
     try {
         const messages = await db.collection("messages").find(
-            ({ $or: [{ from: from }, { to: from }, { to: "Todos" }, {type: "message"}] })
+            ({ $or: [{ from: from }, { to: from }, { to: "Todos" }, { type: "message" }] })
         ).toArray();
 
         if (limit) return res.send(messages.slice(-limit));
