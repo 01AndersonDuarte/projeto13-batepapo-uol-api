@@ -132,7 +132,7 @@ app.get("/messages", async (req, res) => {
         res.status(500).send(err.message)
     }
 });
-app.get("/messages/:id", async (req, res) => {
+app.delete("/messages/:id", async (req, res) => {
     const { id } = req.params;
     const { user } = req.headers;
 
