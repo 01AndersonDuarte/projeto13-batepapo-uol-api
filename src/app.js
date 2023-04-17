@@ -1,6 +1,6 @@
 import express from "express";
 import cors from "cors";
-import { MongoClient } from "mongodb";
+import { MongoClient, ObjectId } from "mongodb";
 import dayjs from "dayjs";
 import dotenv from "dotenv";
 import joi from "joi";
@@ -21,15 +21,15 @@ app.use(express.json());
 
 app.listen(PORT, () => console.log(`Servidor funcionando na porta ${PORT}`));
 
-const headerMiddleware = (req, res, next) => {
-    const content = req.headers.user;
-    if (content) {
-        const decoded = iconv.decode(Buffer.from(content, 'binary'), 'utf-8');
-        req.headers.user = decoded;
-    }
-    next();
-}
-app.use(headerMiddleware);
+// const headerMiddleware = (req, res, next) => {
+//     const content = req.headers.user;
+//     if (content) {
+//         const decoded = iconv.decode(Buffer.from(content, 'binary'), 'utf-8');
+//         req.headers.user = decoded;
+//     }
+//     next();
+// }
+// app.use(headerMiddleware);
 
 app.post("/participants", async (req, res) => {
     const { name } = req.body;
@@ -47,7 +47,7 @@ app.post("/participants", async (req, res) => {
 
     try {
         const user = await db.collection("participants").findOne({ name: name });
-        if (!user && name!=="Todos") {
+        if (!user && name !== "Todos") {
             await db.collection("participants").insertOne({ name: name, lastStatus: Date.now() });
 
             const newUser = {
@@ -131,6 +131,20 @@ app.get("/messages", async (req, res) => {
     } catch (err) {
         res.status(500).send(err.message)
     }
+});
+app.get("/messages/:id", async (req, res) => {
+    const { id } = req.params;
+    const { user } = req.headers;
+
+    const deleteMessage = await db.collection("messages").findOne({_id: new ObjectId(id)});
+    if(!deleteMessage) return res.sendStatus(404);
+    if(deleteMessage.from!==user) return res.sendStatus(401);
+    
+    // const messageUser = await db.collection("messages").findOne({from: user});
+    // if(!messageUser) return res.status(404).send("Você não está logado");
+
+    await db.collection("messages").deleteOne({_id: new ObjectId(id)});
+    res.send("Mensagem apagada com sucesso");
 });
 
 app.post("/status", async (req, res) => {
